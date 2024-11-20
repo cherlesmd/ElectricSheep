@@ -6,7 +6,6 @@ import java.util.List;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
-import org.visualize.audio.PlayAudio;
 import be.tarsos.dsp.AudioProcessor;
 import be.tarsos.dsp.AudioDispatcher;
 import be.tarsos.dsp.AudioEvent;
@@ -31,15 +30,14 @@ import javafx.stage.Stage;
 
 public class App implements PitchDetectionHandler {
 
-    PlayAudio playAudio;
     private AudioDispatcher dispatcher;
     private PitchEstimationAlgorithm algo;
     private double pitch;
     private float sampleRate = 44100;
-    private int bufferSize = 2048;
-    private int overlap = 1024;
+    private int bufferSize = 1024;
+    private int overlap = 512;
     private String fileName;
-    private int numBins = 40;
+    private int numBins = 128;
     private boolean logarithmic = true;
     private int minFrequency = 50;
     private int maxFrequency = 11000;
@@ -78,13 +76,30 @@ public class App implements PitchDetectionHandler {
             float[] audioFloatBuffer = audioEvent.getFloatBuffer();
             float[] transformBuffer = new float[bufferSize * 2];
             System.arraycopy(audioFloatBuffer, 0, transformBuffer, 0, audioFloatBuffer.length);
+
             fft.forwardTransform(transformBuffer);
             fft.modulus(transformBuffer, amplitudes);
             int[] bins = binFrequencies(amplitudes, fft);
-            for (int i = 0; i < bins.length; i++) {
-                double[] range = getBinRange(i);
-                System.out.printf("Bin %d (%.2f Hz - %.2f Hz): %d frequencies%n", i, range[0], range[1], bins[i]);
+
+            // calculate amplitudes
+            for (int i = 0; i < amplitudes.length; i++) {
+                float real = transformBuffer[2 * i];
+                float imaginary = transformBuffer[2 * i + 1];
+                amplitudes[i] = (float) Math.sqrt(real * real + imaginary * imaginary);
             }
+
+            // normalize magnitude
+            float maxAmplitude = 0;
+            for (float amplitude : amplitudes) {
+                maxAmplitude = Math.max(maxAmplitude, amplitude);
+            }
+
+            // amplitude range is from 0 to 1
+            for (int i = 0; i < amplitudes.length; i++) {
+                amplitudes[i] /= maxAmplitude; 
+                //System.out.printf("amp: %d.2", i );
+            }
+
             return true;
         }
 
@@ -114,7 +129,6 @@ public class App implements PitchDetectionHandler {
             }
         }
         return bins;
-
     }
 
     private List<Double> extractFrequencies(float[] amplitudes, FFT fft) {
@@ -127,7 +141,6 @@ public class App implements PitchDetectionHandler {
                 frequencies.add(frequency);
             }
         }
-
         return frequencies;
     }
 
@@ -171,46 +184,6 @@ public class App implements PitchDetectionHandler {
                 }).start();
     }
 
-    // @Override
-    public void start(Stage stage) {
-        playAudio = new PlayAudio("24003__erdie__explosion-mega-thunder.wav");
 
-        SplitPane splitRoot = new SplitPane();
-
-        VBox right = new VBox();
-        right.getChildren().add(new Label("Right Side"));
-        right.setBackground(new Background(new BackgroundFill(
-                Color.BLACK, null,
-                Insets.EMPTY)));
-        HBox left = new HBox();
-        left.setSpacing(10);
-        left.setBackground(new Background(new BackgroundFill(
-                Color.BLACK, null,
-                Insets.EMPTY)));
-
-        Button play = new Button("i>");
-        Button stop = new Button("||");
-        Button restart = new Button("<");
-
-        stop.setOnAction(event -> playAudio.pause());
-        play.setOnAction(event -> playAudio.play());
-        restart.setOnAction(event -> playAudio.restart());
-        left.getChildren().addAll(play, stop, restart);
-        splitRoot.getItems().addAll(left, right);
-
-        splitRoot.setDividerPositions(0.15);
-        Scene scene = new Scene(splitRoot, 800, 600);
-        stage.setMaximized(true);
-        stage.setTitle("Electric Sheep");
-        stage.setScene(scene);
-        stage.show();
-    }
-
-    // @Override
-    public void stop() {
-        if (playAudio != null) {
-            playAudio.close();
-        }
-    }
 
 }
