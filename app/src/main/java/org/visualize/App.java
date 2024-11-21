@@ -24,23 +24,29 @@ import javafx.scene.control.SplitPane;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
-public class App implements PitchDetectionHandler {
+public class App extends Application implements PitchDetectionHandler {
 
     private AudioDispatcher dispatcher;
     private PitchEstimationAlgorithm algo;
     private double pitch;
     private float sampleRate = 44100;
-    private int bufferSize = 1024;
-    private int overlap = 512;
+    private int bufferSize = 2048;
+    private int overlap = 1024;
     private String fileName;
     private int numBins = 128;
     private boolean logarithmic = true;
     private int minFrequency = 50;
     private int maxFrequency = 11000;
+    private static final int WIDTH = 800; // Window width
+    private static final int HEIGHT = 400;
+    private Rectangle[] bars = new Rectangle[numBins];
+    private double[] amplitudeBins = new double[numBins];
 
     public App() {
         this.fileName = "24003__erdie__explosion-mega-thunder.wav";
@@ -79,28 +85,46 @@ public class App implements PitchDetectionHandler {
 
             fft.forwardTransform(transformBuffer);
             fft.modulus(transformBuffer, amplitudes);
-            int[] bins = binFrequencies(amplitudes, fft);
+            // int[] bins = binFrequencies(amplitudes, fft);
+            binAmplitudes(amplitudes, transformBuffer);
 
             // calculate amplitudes
-            for (int i = 0; i < amplitudes.length; i++) {
+            for (int i = 0; i < amplitudeBins.length; i++) {
                 float real = transformBuffer[2 * i];
                 float imaginary = transformBuffer[2 * i + 1];
-                amplitudes[i] = (float) Math.sqrt(real * real + imaginary * imaginary);
+                amplitudeBins[i] = (float) Math.sqrt(real * real + imaginary * imaginary);
             }
 
             // normalize magnitude
-            float maxAmplitude = 0;
-            for (float amplitude : amplitudes) {
+            double maxAmplitude = 0;
+            for (double amplitude : amplitudeBins) {
                 maxAmplitude = Math.max(maxAmplitude, amplitude);
             }
 
             // amplitude range is from 0 to 1
-            for (int i = 0; i < amplitudes.length; i++) {
-                amplitudes[i] /= maxAmplitude; 
-                //System.out.printf("amp: %d.2", i );
+            for (int i = 0; i < amplitudeBins.length; i++) {
+                amplitudeBins[i] /= maxAmplitude;
+                System.out.printf("amp: %f ", amplitudeBins[i]);
             }
 
             return true;
+        }
+
+        private void binAmplitudes(float[] amplitudes2, float[] transformBuffer) {
+            for (int i = 0; i < numBins; i++) {
+                double startFreq = minFrequency * Math.pow(maxFrequency / minFrequency, (double) i / numBins);
+                double endFreq = minFrequency * Math.pow(maxFrequency / minFrequency, (double) (i + 1) / numBins);
+
+                int startIndex = (int) Math.floor(startFreq * bufferSize / sampleRate);
+                int endIndex = (int) Math.floor(endFreq * bufferSize / sampleRate);
+
+                double amplitudeSum = 0;
+                for (int j = startIndex; j < endIndex && j < amplitudes.length; j++) {
+                    amplitudeSum += amplitudes[j];
+                }
+
+                amplitudeBins[i] = amplitudeSum / (endIndex - startIndex + 1); // Average amplitude
+            }
         }
 
         @Override
@@ -175,15 +199,38 @@ public class App implements PitchDetectionHandler {
     }
 
     public static void main(String[] args) {
+
         new Thread(
                 new Runnable() {
+
                     @Override
                     public void run() {
                         new App();
                     }
                 }).start();
+        // launch(args);
     }
 
+    @Override
+    public void start(Stage primaryStage) throws Exception {
+        Pane root = new Pane();
+        double barWidth = (double) WIDTH / numBins;
 
+        for (int i = 0; i < numBins; i++) {
+            Rectangle bar = new Rectangle();
+            bar.setWidth(barWidth - 2);
+            bar.setHeight(0);
+            bar.setX(i * barWidth);
+            bar.setY(HEIGHT);
+            bar.setFill(Color.BLUE);
+            bars[i] = bar;
+            root.getChildren().add(bar);
+        }
+
+        Scene scene = new Scene(root, WIDTH, HEIGHT, Color.BLACK);
+        primaryStage.setTitle("Electric Sheep");
+        primaryStage.setScene(scene);
+        primaryStage.show();
+    }
 
 }
