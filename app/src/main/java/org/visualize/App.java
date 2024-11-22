@@ -3,9 +3,9 @@ package org.visualize;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
+import be.tarsos.dsp.io.jvm.AudioPlayer;
 import be.tarsos.dsp.AudioProcessor;
 import be.tarsos.dsp.AudioDispatcher;
 import be.tarsos.dsp.AudioEvent;
@@ -16,16 +16,8 @@ import be.tarsos.dsp.pitch.PitchProcessor;
 import be.tarsos.dsp.pitch.PitchProcessor.PitchEstimationAlgorithm;
 import be.tarsos.dsp.util.fft.FFT;
 import javafx.application.Application;
-import javafx.geometry.Insets;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.SplitPane;
-import javafx.scene.layout.Background;
-import javafx.scene.layout.BackgroundFill;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
-import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
@@ -33,12 +25,12 @@ import javafx.stage.Stage;
 public class App extends Application implements PitchDetectionHandler {
 
     private AudioDispatcher dispatcher;
-    private PitchEstimationAlgorithm algo;
+    private PitchEstimationAlgorithm algo = PitchEstimationAlgorithm.YIN;
     private double pitch;
     private float sampleRate = 44100;
     private int bufferSize = 2048;
     private int overlap = 1024;
-    private String fileName;
+    private String fileName = "24003__erdie__explosion-mega-thunder.wav";
     private int numBins = 128;
     private boolean logarithmic = true;
     private int minFrequency = 50;
@@ -47,12 +39,6 @@ public class App extends Application implements PitchDetectionHandler {
     private static final int HEIGHT = 400;
     private Rectangle[] bars = new Rectangle[numBins];
     private double[] amplitudeBins = new double[numBins];
-
-    public App() {
-        this.fileName = "24003__erdie__explosion-mega-thunder.wav";
-        this.algo = PitchEstimationAlgorithm.YIN;
-        setDispatch();
-    }
 
     private void setDispatch() {
         if (dispatcher != null) {
@@ -63,6 +49,7 @@ public class App extends Application implements PitchDetectionHandler {
             File audioFile = new File(fileName);
             dispatcher = AudioDispatcherFactory.fromFile(audioFile, bufferSize, overlap);
             AudioFormat format = AudioSystem.getAudioFileFormat(audioFile).getFormat();
+            dispatcher.addAudioProcessor(new AudioPlayer(format));
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -104,8 +91,9 @@ public class App extends Application implements PitchDetectionHandler {
             // amplitude range is from 0 to 1
             for (int i = 0; i < amplitudeBins.length; i++) {
                 amplitudeBins[i] /= maxAmplitude;
-                System.out.printf("amp: %f ", amplitudeBins[i]);
+                // System.out.printf("amp: %f ", amplitudeBins[i]);
             }
+            updateBars();
 
             return true;
         }
@@ -123,7 +111,7 @@ public class App extends Application implements PitchDetectionHandler {
                     amplitudeSum += amplitudes[j];
                 }
 
-                amplitudeBins[i] = amplitudeSum / (endIndex - startIndex + 1); // Average amplitude
+                amplitudeBins[i] = amplitudeSum / (endIndex - startIndex + 1);
             }
         }
 
@@ -198,19 +186,6 @@ public class App extends Application implements PitchDetectionHandler {
         }
     }
 
-    public static void main(String[] args) {
-
-        new Thread(
-                new Runnable() {
-
-                    @Override
-                    public void run() {
-                        new App();
-                    }
-                }).start();
-        // launch(args);
-    }
-
     @Override
     public void start(Stage primaryStage) throws Exception {
         Pane root = new Pane();
@@ -231,6 +206,25 @@ public class App extends Application implements PitchDetectionHandler {
         primaryStage.setTitle("Electric Sheep");
         primaryStage.setScene(scene);
         primaryStage.show();
+
+        new Thread(() -> {
+            setDispatch();
+        }).start();
     }
 
+    private void updateBars() {
+        javafx.application.Platform.runLater(() -> {
+            for (int i = 0; i < amplitudeBins.length; i++) {
+                double amplitude = amplitudeBins[i];
+                double barHeight = amplitude * HEIGHT; // Scale amplitude to fit window height
+                bars[i].setHeight(barHeight);
+                bars[i].setY(HEIGHT - barHeight); // Adjust y-position to align with bottom
+                bars[i].setFill(Color.color(amplitude, 0.5, 1.0)); // Change color based on amplitude
+            }
+        });
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
 }
