@@ -47,7 +47,6 @@ public class App extends Application {
     private static final int HEIGHT = 500;
     private Rectangle[] bars = new Rectangle[numBins];
     private double[] amplitudeBins = new double[numBins];
-    // private boolean logarithmic = true;
 
     private void setDispatch() {
         if (dispatcher != null) {
@@ -131,7 +130,9 @@ public class App extends Application {
 
         for (File file : files) {
             if (file.isFile()) {
-                results.add(file.getName());
+                if (file.isFile() && file.getName().toLowerCase().endsWith(".wav")) {
+                    results.add(file.getName());
+                }
             }
         }
 
@@ -170,7 +171,10 @@ public class App extends Application {
         root.setLeft(menu);
         root.setCenter(visualizerPane);
 
-        Scene scene = new Scene(root, WIDTH, HEIGHT, Color.BLACK);
+        Scene scene = new Scene(root, WIDTH, HEIGHT);
+        String css = new File("src/main/resources/styles.css").toURI().toURL().toExternalForm();
+        scene.getStylesheets().add(css);
+
         primaryStage.setTitle("Electric Sheep");
         primaryStage.setScene(scene);
         primaryStage.show();
@@ -246,68 +250,4 @@ public class App extends Application {
     public static void main(String[] args) {
         launch(args);
     }
-
-    /*
-     * public int[] binFrequencies(float[] amplitudes, FFT fft) {
-     * List<Double> frequencies = extractFrequencies(amplitudes, fft);
-     * int[] bins = new int[numBins];
-     * for (double frequency : frequencies) {
-     * int binIndex = frequencyToBin(frequency);
-     * if (binIndex >= 0 && binIndex < numBins) {
-     * bins[binIndex]++;
-     * }
-     * }
-     * return bins;
-     * }
-     */
-
-    /*
-     * private List<Double> extractFrequencies(float[] amplitudes, FFT fft) {
-     * List<Double> frequencies = new ArrayList<>();
-     * 
-     * for (int binIndex = 0; binIndex < amplitudes.length; binIndex++) {
-     * double frequency = binIndex * sampleRate / bufferSize;
-     * 
-     * if (amplitudes[binIndex] > 0.01) {
-     * frequencies.add(frequency);
-     * }
-     * }
-     * return frequencies;
-     * }
-     */
-
-    /*
-     * private int frequencyToBin(double frequency) {
-     * if (frequency < minFrequency || frequency > maxFrequency)
-     * return -1;
-     * 
-     * if (logarithmic) {
-     * double logMin = Math.log10(minFrequency);
-     * double logMax = Math.log10(maxFrequency);
-     * double logFreq = Math.log10(frequency);
-     * return (int) ((logFreq - logMin) / (logMax - logMin) * numBins);
-     * } else {
-     * return (int) ((frequency - minFrequency) / (maxFrequency - minFrequency) *
-     * numBins);
-     * }
-     * }
-     */
-
-    /*
-     * public double[] getBinRange(int binIndex) {
-     * if (logarithmic) {
-     * double logMin = Math.log10(minFrequency);
-     * double logMax = Math.log10(maxFrequency);
-     * double logBinWidth = (logMax - logMin) / numBins;
-     * double lowerBound = Math.pow(10, logMin + binIndex * logBinWidth);
-     * double upperBound = Math.pow(10, logMin + (binIndex + 1) * logBinWidth);
-     * return new double[] { lowerBound, upperBound };
-     * } else {
-     * double binWidth = (maxFrequency - minFrequency) / numBins;
-     * double lowerBound = minFrequency + binIndex * binWidth;
-     * double upperBound = minFrequency + (binIndex + 1) * binWidth;
-     * return new double[] { lowerBound, upperBound };
-     * }
-     * }
-     */
 }
