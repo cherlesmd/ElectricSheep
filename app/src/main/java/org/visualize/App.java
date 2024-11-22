@@ -12,14 +12,12 @@ import be.tarsos.dsp.GainProcessor;
 import be.tarsos.dsp.AudioDispatcher;
 import be.tarsos.dsp.AudioEvent;
 import be.tarsos.dsp.io.jvm.AudioDispatcherFactory;
-import be.tarsos.dsp.pitch.PitchDetectionHandler;
-import be.tarsos.dsp.pitch.PitchDetectionResult;
-import be.tarsos.dsp.pitch.PitchProcessor;
 import be.tarsos.dsp.pitch.PitchProcessor.PitchEstimationAlgorithm;
 import be.tarsos.dsp.util.fft.FFT;
 import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
+import javafx.scene.control.Button;
 import javafx.scene.control.ListView;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.BorderPane;
@@ -29,25 +27,27 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
-public class App extends Application implements PitchDetectionHandler {
+public class App extends Application {
 
     private Thread audioThread;
     private AudioDispatcher dispatcher;
     private PitchEstimationAlgorithm algo = PitchEstimationAlgorithm.YIN;
     GainProcessor gainProcessor = new GainProcessor(1.0);
-    private double pitch;
+    private boolean isPlaying;
+    private double pauzedAt;
+    private double currentTime;
     private float sampleRate = 44100;
     private int bufferSize = 2048;
     private int overlap = 1024;
-    private String fileName = "src/main/resources/24003__erdie__explosion-mega-thunder.wav";
+    private String fileName;
     private int numBins = 128;
-    // private boolean logarithmic = true;
     private int minFrequency = 50;
     private int maxFrequency = 11000;
     private static final int WIDTH = 800;
     private static final int HEIGHT = 500;
     private Rectangle[] bars = new Rectangle[numBins];
     private double[] amplitudeBins = new double[numBins];
+    // private boolean logarithmic = true;
 
     private void setDispatch() {
         if (dispatcher != null) {
@@ -62,9 +62,8 @@ public class App extends Application implements PitchDetectionHandler {
             e.printStackTrace();
         }
 
-        dispatcher.addAudioProcessor(gainProcessor);
-        dispatcher.addAudioProcessor(new PitchProcessor(algo, sampleRate, bufferSize, this));
         dispatcher.addAudioProcessor(fftProcessor);
+        dispatcher.skip(pauzedAt);
 
         new Thread(dispatcher, "Audio dispatching").start();
     }
@@ -98,6 +97,7 @@ public class App extends Application implements PitchDetectionHandler {
                 amplitudeBins[i] /= maxAmplitude;
             }
 
+            currentTime = audioEvent.getTimeStamp();
             updateBars();
             return true;
         }
@@ -124,15 +124,6 @@ public class App extends Application implements PitchDetectionHandler {
     };
 
     @Override
-    public void handlePitch(PitchDetectionResult pitchDetectionResult, AudioEvent audioEvent) {
-        if (pitchDetectionResult.isPitched()) {
-            pitch = pitchDetectionResult.getPitch();
-        } else {
-            pitch = -1;
-        }
-    }
-
-    @Override
     public void start(Stage primaryStage) throws Exception {
         List<String> results = new ArrayList<String>();
 
@@ -146,24 +137,12 @@ public class App extends Application implements PitchDetectionHandler {
 
         ListView<String> listView = new ListView<>();
         listView.getItems().addAll(results);
-        listView.setStyle("-fx-background-color: black; -fx-text-fill: white;");
-        listView.setOnMouseClicked((MouseEvent event) -> {
-            String selectedFile = listView.getSelectionModel().getSelectedItem();
-            if (selectedFile != null) {
-                if (dispatcher != null) {
-                    dispatcher.stop();
-                }
-                if (audioThread != null && audioThread.isAlive()) {
-                    try {
-                        audioThread.join(); // Wait for the thread to finish
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-                fileName = selectedFile;
-                setDispatch();
-            }
-        });
+        listView.setOnMouseClicked((MouseEvent event) -> newAudio(listView));
+
+        Button playButton = new Button("Play");
+        Button pauseButton = new Button("Pause");
+        playButton.setOnAction(e -> playAudio());
+        pauseButton.setOnAction(e -> pauseAudio());
 
         BorderPane root = new BorderPane();
         root.setStyle("-fx-background-color: black;");
@@ -171,7 +150,7 @@ public class App extends Application implements PitchDetectionHandler {
         VBox menu = new VBox(10);
         menu.setPadding(new Insets(10));
         menu.setStyle("-fx-background-color: black;");
-        menu.getChildren().addAll(listView);
+        menu.getChildren().addAll(listView, playButton, pauseButton);
 
         Pane visualizerPane = new Pane();
         visualizerPane.setStyle("-fx-background-color: black;");
@@ -195,6 +174,61 @@ public class App extends Application implements PitchDetectionHandler {
         primaryStage.setTitle("Electric Sheep");
         primaryStage.setScene(scene);
         primaryStage.show();
+    }
+
+    private void pauseAudio() {
+        if (isPlaying) {
+            if (dispatcher != null) {
+                dispatcher.stop();
+            }
+            if (audioThread != null && audioThread.isAlive()) {
+                try {
+                    audioThread.join();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+            pauzedAt = currentTime;
+            isPlaying = false;
+        }
+    }
+
+    private void playAudio() {
+        if (!isPlaying) {
+            if (dispatcher != null) {
+                dispatcher.stop();
+            }
+            if (audioThread != null && audioThread.isAlive()) {
+                try {
+                    audioThread.join();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+            isPlaying = true;
+            setDispatch();
+        }
+    }
+
+    private void newAudio(ListView<String> listView) {
+        String selectedFile = listView.getSelectionModel().getSelectedItem();
+        if (selectedFile != null) {
+            if (dispatcher != null) {
+                dispatcher.stop();
+            }
+            if (audioThread != null && audioThread.isAlive()) {
+                try {
+                    audioThread.join();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+            pauzedAt = 0;
+            currentTime = 0;
+            fileName = selectedFile;
+            isPlaying = true;
+            setDispatch();
+        }
     }
 
     private void updateBars() {
