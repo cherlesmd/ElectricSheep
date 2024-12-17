@@ -25,6 +25,7 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 
 public class App extends Application {
@@ -47,6 +48,7 @@ public class App extends Application {
     private static final int HEIGHT = 500;
     private Rectangle[] bars = new Rectangle[numBins];
     private double[] amplitudeBins = new double[numBins];
+    private String currentDirectory;
 
     private void setDispatch() {
         if (dispatcher != null) {
@@ -79,19 +81,23 @@ public class App extends Application {
 
             fft.forwardTransform(transformBuffer);
             fft.modulus(transformBuffer, amplitudes);
+            // Organize the calculated amplitudes into frequency bins
             binAmplitudes(amplitudes, transformBuffer);
 
+            // Calculate and normalize the amplitudes for each bin
             for (int i = 0; i < amplitudeBins.length; i++) {
                 float real = transformBuffer[2 * i];
                 float imaginary = transformBuffer[2 * i + 1];
                 amplitudeBins[i] = (float) Math.sqrt(real * real + imaginary * imaginary);
             }
 
+            // Find the maximum amplitude for normalization
             double maxAmplitude = 0;
             for (double amplitude : amplitudeBins) {
                 maxAmplitude = Math.max(maxAmplitude, amplitude);
             }
 
+            // Normalize the amplitude bins to the range [0, 1]
             for (int i = 0; i < amplitudeBins.length; i++) {
                 amplitudeBins[i] /= maxAmplitude;
             }
@@ -103,12 +109,15 @@ public class App extends Application {
 
         private void binAmplitudes(float[] amplitudes2, float[] transformBuffer) {
             for (int i = 0; i < numBins; i++) {
+                // Define the frequency range for this bin (logarithmic scaling)
                 double startFreq = minFrequency * Math.pow(maxFrequency / minFrequency, (double) i / numBins);
                 double endFreq = minFrequency * Math.pow(maxFrequency / minFrequency, (double) (i + 1) / numBins);
 
+                // Calculate the corresponding indices in the FFT output
                 int startIndex = (int) Math.floor(startFreq * bufferSize / sampleRate);
                 int endIndex = (int) Math.floor(endFreq * bufferSize / sampleRate);
 
+                // Sum the amplitudes within this frequency range
                 double amplitudeSum = 0;
                 for (int j = startIndex; j < endIndex && j < amplitudes.length; j++) {
                     amplitudeSum += amplitudes[j];
@@ -124,20 +133,35 @@ public class App extends Application {
 
     @Override
     public void start(Stage primaryStage) throws Exception {
-        List<String> results = new ArrayList<String>();
-
-        File[] files = new File("src/main/resources").listFiles();
-
-        for (File file : files) {
-            if (file.isFile()) {
-                if (file.isFile() && file.getName().toLowerCase().endsWith(".wav")) {
-                    results.add(file.getName());
-                }
-            }
-        }
-
         ListView<String> listView = new ListView<>();
-        listView.getItems().addAll(results);
+        List<String> results = new ArrayList<>();
+
+        DirectoryChooser directoryChooser = new DirectoryChooser();
+        directoryChooser.setTitle("Select a Directory");
+
+        Button chooseDir = new Button("Choose Directory");
+        chooseDir.setOnAction(e -> {
+            File selectedDirectory = directoryChooser.showDialog(primaryStage);
+
+            if (selectedDirectory != null) {
+                currentDirectory = selectedDirectory.getAbsolutePath();
+                System.out.println("Selected Directory: " + currentDirectory);
+
+                results.clear();
+
+                File[] files = new File(currentDirectory).listFiles();
+                if (files != null) {
+                    for (File file : files) {
+                        if (file.isFile() && file.getName().toLowerCase().endsWith(".wav")) {
+                            results.add(file.getName());
+                        }
+                    }
+                }
+
+                listView.getItems().setAll(results);
+            }
+        });
+
         listView.setOnMouseClicked((MouseEvent event) -> newAudio(listView));
 
         Button playButton = new Button("Play");
@@ -151,7 +175,7 @@ public class App extends Application {
         VBox menu = new VBox(10);
         menu.setPadding(new Insets(10));
         menu.setStyle("-fx-background-color: black;");
-        menu.getChildren().addAll(listView, playButton, pauseButton);
+        menu.getChildren().addAll(listView, playButton, pauseButton, chooseDir);
 
         Pane visualizerPane = new Pane();
         visualizerPane.setStyle("-fx-background-color: black;");
